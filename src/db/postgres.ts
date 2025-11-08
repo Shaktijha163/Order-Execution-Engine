@@ -3,12 +3,8 @@ import { Order } from '../models/types';
 
 // Use Railway Postgres env vars if available, otherwise fall back to local defaults
 const pool = new Pool({
-  user: process.env.DB_USER || process.env.PGUSER || 'postgres',
-  host: process.env.DB_HOST || process.env.PGHOST || 'localhost',
-  database: process.env.DB_NAME || process.env.PGDATABASE || 'order_engine',
-  password: process.env.DB_PASSWORD || process.env.PGPASSWORD || 'password',
-  port: parseInt(process.env.DB_PORT || process.env.PGPORT || '5432'),
-  ssl: process.env.DB_SSL === 'false' ? false : { rejectUnauthorized: false },
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
 });
 
 export const initDB = async () => {
@@ -36,7 +32,10 @@ export const initDB = async () => {
       CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
       CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);
     `);
-    console.log('✅ Database initialized successfully');
+    console.log(' Database initialized successfully');
+  } catch (error) {
+    console.error(' Database initialization failed:', error);
+    throw error;
   } finally {
     client.release();
   }
