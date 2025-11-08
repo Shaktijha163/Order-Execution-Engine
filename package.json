@@ -9,12 +9,13 @@
     "start": "node dist/server.js",
     "test": "jest",
     "test:unit": "jest tests/unit",
-    "test:integration": "jest tests/integration",
+    "test:integration": "jest tests/integration --runInBand",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "clean": "rm -rf dist coverage"
   },
   "dependencies": {
+    "@fastify/cors": "8.5.0",
     "@fastify/websocket": "^8.3.1",
     "bullmq": "^4.13.1",
     "fastify": "^4.24.3",

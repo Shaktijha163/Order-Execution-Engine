@@ -97,6 +97,7 @@ export class QueueService {
       // Step 1: Routing - fetch quotes from both DEXs
       await this.sendStatusUpdate(id, 'routing');
       console.log(`[Order ${id}] Starting routing phase`);
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
       const quote = await this.dex.getBestQuote(tokenIn, tokenOut, amountIn);
       console.log(`[Order ${id}] Best quote from ${quote.dex}: ${quote.amountOut.toFixed(6)} ${tokenOut}`);
@@ -108,13 +109,14 @@ export class QueueService {
         quotedAmountOut: quote.amountOut,
       });
       console.log(`[Order ${id}] Building transaction on ${quote.dex}`);
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
       const minAmountOut = quote.amountOut * (1 - slippage);
 
       // Step 3: Submitted - send transaction
       await this.sendStatusUpdate(id, 'submitted');
       console.log(`[Order ${id}] Transaction submitted to ${quote.dex}`);
-
+      await new Promise(resolve => setTimeout(resolve, 2000));
       const result = await this.dex.executeSwap(
         quote.dex,
         {
@@ -172,7 +174,29 @@ export class QueueService {
     };
   }
 
+  async close(): Promise<void> {
+    console.log('Closing QueueService...');
+    
+    // Close worker first
+    if (this.worker) {
+      await this.worker.close();
+      this.worker = null;
+      console.log('Worker closed');
+    }
+
+    // Then close queue
+    await this.orderQueue.close();
+    console.log('Queue closed');
+    
+    // Clear WebSocket connections
+    this.webSocketConnections.clear();
+  }
+
   getQueue() {
     return this.orderQueue;
+  }
+  
+  getWorker() {
+    return this.worker;
   }
 }

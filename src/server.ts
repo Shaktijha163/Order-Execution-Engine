@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import fastifyWebsocket from '@fastify/websocket';
+import fastifyCors from '@fastify/cors';  
 import { orderRoutes } from './routes/orders';
 import { OrderService } from './services/orderService';
 import { QueueService } from './services/queueService';
@@ -13,7 +14,10 @@ const fastify = Fastify({
     transport: { target: 'pino-pretty' },
   },
 });
-
+fastify.register(fastifyCors, {
+  origin: true, //(for development)
+  credentials: true,
+});
 // Register WebSocket plugin
 fastify.register(fastifyWebsocket);
 

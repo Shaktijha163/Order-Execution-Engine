@@ -14,8 +14,21 @@ describe('Order Workflow Integration', () => {
   });
 
   afterAll(async () => {
-    // Clean up
-    await queueService.getQueue().obliterate({ force: true });
+    // UPDATED: Proper cleanup order
+    try {
+      // Wait for any pending jobs to finish
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Clean up queue and worker
+      await queueService.close();
+      
+      // Obliterate remaining jobs
+      await queueService.getQueue().obliterate({ force: true });
+      
+      console.log('QueueService cleaned up');
+    } catch (error) {
+      console.error('Error during cleanup:', error);
+    }
   });
 
   it('should process order through complete lifecycle', async () => {

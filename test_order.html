@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Order Execution Test</title>
+  <style>
+    body { font-family: Arial; padding: 20px; background: #1e1e1e; color: #fff; }
+    button { padding: 10px 20px; margin: 5px; cursor: pointer; font-size: 16px; }
+    #output { background: #000; color: #0f0; padding: 15px; margin-top: 20px; 
+              border-radius: 5px; white-space: pre-wrap; min-height: 300px; overflow: auto; }
+    input { padding: 8px; margin: 5px; width: 200px; }
+  </style>
+</head>
+<body>
+  <h1>🚀 Order Execution Engine - Test Panel</h1>
+  
+  <div>
+    <h3>Submit Single Order:</h3>
+    <button onclick="submitOrder()">Submit 1 Order</button>
+    <button onclick="submitMultiple()">Submit 5 Orders</button>
+    <button onclick="checkMetrics()">Check Metrics</button>
+  </div>
+
+  <div>
+    <h3>WebSocket Test:</h3>
+    <input type="text" id="orderId" placeholder="Paste Order ID here">
+    <button onclick="connectWebSocket()">Connect WebSocket</button>
+  </div>
+
+  <div id="output">Waiting for action...</div>
+
+  <script>
+    const output = document.getElementById('output');
+    let ws = null;
+
+    function log(message) {
+      output.textContent += `[${new Date().toLocaleTimeString()}] ${message}\n`;
+      output.scrollTop = output.scrollHeight;
+    }
+
+    async function submitOrder() {
+      try {
+        log('Submitting order...');
+        const response = await fetch('http://localhost:3000/api/orders/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: 'demo-user-' + Math.random().toString(36).substr(2, 9),
+            type: 'market',
+            tokenIn: 'SOL',
+            tokenOut: 'USDC',
+            amountIn: Math.random() * 5 + 1,
+            slippage: 0.01
+          })
+        });
+        const data = await response.json();
+        log(' Order created: ' + JSON.stringify(data, null, 2));
+        document.getElementById('orderId').value = data.orderId;
+      } catch (err) {
+        log(' Error: ' + err.message);
+      }
+    }
+
+    async function submitMultiple() {
+      log(' Submitting 5 orders concurrently...\n');
+      const tokens = [
+        ['SOL', 'USDC'],
+        ['SOL', 'BONK'],
+        ['USDC', 'SOL'],
+        ['SOL', 'USDC'],
+        ['USDC', 'BONK']
+      ];
+
+      const promises = tokens.map(([tokenIn, tokenOut], i) =>
+        fetch('http://localhost:3000/api/orders/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: `user-${i + 1}`,
+            type: 'market',
+            tokenIn,
+            tokenOut,
+            amountIn: Math.random() * 3 + 1,
+            slippage: 0.01
+          })
+        }).then(r => r.json())
+      );
+
+      const results = await Promise.all(promises);
+      results.forEach((data, i) => {
+        log(`Order ${i + 1}: ${data.orderId}`);
+      });
+      log('\n Check your server terminal for processing logs!');
+    }
+
+    async function checkMetrics() {
+      try {
+        const response = await fetch('http://localhost:3000/api/orders/metrics');
+        const data = await response.json();
+        log(' Queue Metrics:\n' + JSON.stringify(data, null, 2));
+      } catch (err) {
+        log(' Error: ' + err.message);
+      }
+    }
+
+    function connectWebSocket() {
+      const orderId = document.getElementById('orderId').value;
+      if (!orderId) return alert('Please enter an Order ID (or submit an order first)');
+
+      if (ws) ws.close();
+
+      log(`\n Connecting WebSocket for order: ${orderId}...`);
+      ws = new WebSocket(`ws://localhost:3000/api/orders/ws/${orderId}`);
+
+      ws.onopen = () => log('WebSocket connected!');
+      ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        log(`Status Update: ${msg.status}\n${JSON.stringify(msg, null, 2)}`);
+      };
+      ws.onerror = (err) => log(' WebSocket error: ' + err);
+      ws.onclose = () => log(' WebSocket closed');
+    }
+  </script>
+</body>
+</html>
