@@ -19,25 +19,40 @@
 
 import Redis from 'ioredis';
 
-// Use REDIS_URL if available (Railway provides this)
-export const redis = process.env.REDIS_URL 
-  ? new Redis(process.env.REDIS_URL, {
+// Parse Railway Redis URL and configure appropriately
+const createRedisClient = () => {
+  const redisUrl = process.env.REDIS_URL;
+  
+  if (redisUrl) {
+    // Railway provides REDIS_URL
+    return new Redis(redisUrl, {
       maxRetriesPerRequest: null,
-      tls: { rejectUnauthorized: false } // Required for Railway Redis
-    })
-  : new Redis({
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379'),
-      password: process.env.REDIS_PASSWORD,
-      maxRetriesPerRequest: null,
+      enableReadyCheck: false,
+      connectTimeout: 30000,
+      retryStrategy(times) {
+        const delay = Math.min(times * 50, 2000);
+        return delay;
+      },
     });
+  }
+  
+  // Fallback to individual env vars
+  return new Redis({
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT || '6379'),
+    password: process.env.REDIS_PASSWORD,
+    maxRetriesPerRequest: null,
+  });
+};
+
+export const redis = createRedisClient();
 
 export const initRedis = async () => {
   try {
     await redis.ping();
-    console.log(' Redis connected successfully');
+    console.log('✅ Redis connected successfully');
   } catch (error) {
-    console.error(' Redis connection failed:', error);
+    console.error('❌ Redis connection failed:', error);
     throw error;
   }
 };
