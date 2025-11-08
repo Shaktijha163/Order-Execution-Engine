@@ -1,12 +1,14 @@
 import { Pool } from 'pg';
 import { Order } from '../models/types';
 
+// Use Railway Postgres env vars if available, otherwise fall back to local defaults
 const pool = new Pool({
-  user: process.env.DB_USER || 'postgres',
-  host: process.env.DB_HOST || 'localhost',
-  database: process.env.DB_NAME || 'order_engine',
-  password: process.env.DB_PASSWORD || 'password',
-  port: parseInt(process.env.DB_PORT || '5432'),
+  user: process.env.DB_USER || process.env.PGUSER || 'postgres',
+  host: process.env.DB_HOST || process.env.PGHOST || 'localhost',
+  database: process.env.DB_NAME || process.env.PGDATABASE || 'order_engine',
+  password: process.env.DB_PASSWORD || process.env.PGPASSWORD || 'password',
+  port: parseInt(process.env.DB_PORT || process.env.PGPORT || '5432'),
+  ssl: process.env.DB_SSL === 'false' ? false : { rejectUnauthorized: false },
 });
 
 export const initDB = async () => {
@@ -30,12 +32,11 @@ export const initDB = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
-      
       CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
       CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
       CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);
     `);
-    console.log('Database initialized');
+    console.log('✅ Database initialized successfully');
   } finally {
     client.release();
   }
@@ -70,8 +71,8 @@ export const saveOrder = async (order: Order): Promise<void> => {
 };
 
 export const updateOrder = async (order: Partial<Order> & { id: string }): Promise<void> => {
-  const fields = [];
-  const values = [];
+  const fields: string[] = [];
+  const values: any[] = [];
   let paramCount = 1;
 
   if (order.status !== undefined) {
@@ -99,7 +100,6 @@ export const updateOrder = async (order: Partial<Order> & { id: string }): Promi
     values.push(order.error);
   }
 
-  // Always update the timestamp
   fields.push(`updated_at = $${paramCount++}`);
   values.push(order.updatedAt || new Date());
 
