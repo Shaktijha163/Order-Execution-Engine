@@ -1,5 +1,7 @@
 # Order Execution Engine
 
+[Public URL](https://order-execution-engine-production-4c70.up.railway.app) • https://order-execution-engine-production-4c70.up.railway.app
+
 A high-performance order execution engine with DEX routing and real-time WebSocket updates.
 
 ## Why Market Orders?
@@ -28,5 +30,4 @@ Implement event listeners for new token launches - the core execution engine rem
 ## Setup
 
 1. **Clone and install dependencies**
-   ```bash
-   npm install
+       npm install
