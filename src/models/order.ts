@@ -6,8 +6,8 @@ export const OrderRequestSchema = z.object({
   type: z.literal('market'),
   tokenIn: z.string().min(1, 'Token in is required'),
   tokenOut: z.string().min(1, 'Token out is required'),
-  amountIn: z.number().positive('Amount must be positive'),
-  slippage: z.number().min(0).max(1).optional().default(0.01), 
+  amountIn: z.coerce.number().positive('Amount must be positive'),   
+  slippage: z.coerce.number().min(0).max(1).optional().default(0.01), 
 });
 
 export const OrderRequestJsonSchema = zodToJsonSchema(OrderRequestSchema, {
