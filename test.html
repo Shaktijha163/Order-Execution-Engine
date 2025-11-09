@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Order Execution Test</title>
+  <style>
+    body { 
+      font-family: 'Segoe UI', Arial, sans-serif; 
+      padding: 20px; 
+      background: #0d1117; 
+      color: #c9d1d9; 
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    h1 {
+      text-align: center;
+      color: #58a6ff;
+      text-shadow: 0 0 20px rgba(88, 166, 255, 0.5);
+    }
+    .section {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+    h3 {
+      color: #58a6ff;
+      margin-top: 0;
+    }
+    button { 
+      padding: 10px 20px; 
+      margin: 5px; 
+      cursor: pointer; 
+      font-size: 16px;
+      background: #238636;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    button:hover {
+      background: #2ea043;
+      box-shadow: 0 0 15px rgba(46, 160, 67, 0.5);
+    }
+    button:active {
+      transform: scale(0.98);
+    }
+    button.secondary {
+      background: #1f6feb;
+    }
+    button.secondary:hover {
+      background: #388bfd;
+    }
+    #output { 
+      background: #0d1117; 
+      color: #7ee787; 
+      padding: 15px; 
+      border-radius: 6px; 
+      white-space: pre-wrap; 
+      height: 400px; 
+      overflow-y: auto;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      border: 1px solid #30363d;
+      line-height: 1.6;
+    }
+    input { 
+      padding: 10px; 
+      margin: 5px; 
+      width: 300px;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #c9d1d9;
+      font-size: 14px;
+    }
+    input:focus {
+      outline: none;
+      border-color: #58a6ff;
+    }
+    .status-indicator {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 8px;
+      animation: pulse 2s infinite;
+    }
+    .status-indicator.connected {
+      background: #3fb950;
+      box-shadow: 0 0 10px #3fb950;
+    }
+    .status-indicator.disconnected {
+      background: #f85149;
+      animation: none;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .order-card {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-left: 4px solid #58a6ff;
+      padding: 12px;
+      margin: 10px 0;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    .order-status {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: bold;
+      margin-left: 10px;
+    }
+    .order-status.pending { background: #9e6a03; color: #000; }
+    .order-status.routing { background: #0969da; color: #fff; }
+    .order-status.building { background: #8957e5; color: #fff; }
+    .order-status.submitted { background: #bf8700; color: #000; }
+    .order-status.confirmed { background: #2ea043; color: #fff; }
+    .order-status.failed { background: #f85149; color: #fff; }
+    #activeOrders {
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .error { color: #f85149; }
+    .success { color: #3fb950; }
+    .info { color: #58a6ff; }
+    .warning { color: #d29922; }
+    .controls-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 10px;
+    }
+    .ws-status {
+      display: flex;
+      align-items: center;
+      margin: 10px 0;
+      padding: 10px;
+      background: #0d1117;
+      border-radius: 6px;
+    }
+  </style>
+</head>
+<body>
+  <h1> Order Execution Engine - Live Test Dashboard</h1>
+  
+  <div class="section">
+    <h3>⚡ Quick Actions</h3>
+    <div class="controls-grid">
+      <button onclick="submitOrder()">Submit 1 Order</button>
+      <button onclick="submitMultiple(3)">Submit 3 Orders</button>
+      <button onclick="submitMultiple(5)">Submit 5 Orders</button>
+      <button class="secondary" onclick="checkMetrics()"> Check Metrics</button>
+      <button class="secondary" onclick="clearOutput()">🧹 Clear Output</button>
+    </div>
+  </div>
+
+  <div class="section">
+    <h3> WebSocket Monitor</h3>
+    <div class="ws-status">
+      <span class="status-indicator disconnected" id="wsIndicator"></span>
+      <span id="wsStatus">Disconnected</span>
+    </div>
+    <input type="text" id="orderId" placeholder="Order ID (auto-filled after submission)">
+    <button onclick="connectWebSocket()">Connect WebSocket</button>
+    <button class="secondary" onclick="disconnectWebSocket()">Disconnect</button>
+  </div>
+
+  <div class="section">
+    <h3> Active Orders (<span id="orderCount">0</span>)</h3>
+    <div id="activeOrders">No orders yet. Submit an order to begin!</div>
+  </div>
+
+  <div class="section">
+    <h3> Live Console Logs</h3>
+    <div id="output">🎬 Ready to test! Click any button above to start...\n\n</div>
+  </div>
+
+  <script>
+    // CHANGE THIS TO YOUR RAILWAY URL
+    const API_URL = 'https://order-execution-engine-production-4c70.up.railway.app';
+    const WS_URL = 'wss://order-execution-engine-production-4c70.up.railway.app';
+    
+    const output = document.getElementById('output');
+    const activeOrdersDiv = document.getElementById('activeOrders');
+    const orderCountSpan = document.getElementById('orderCount');
+    const wsIndicator = document.getElementById('wsIndicator');
+    const wsStatus = document.getElementById('wsStatus');
+    
+    let ws = null;
+    let orders = new Map();
+
+    function log(message, type = 'info') {
+      const timestamp = new Date().toLocaleTimeString();
+      const icon = {
+        'error': '',
+        'success': '',
+        'info': '',
+        'warning': ''
+      }[type] || '';
+      
+      const className = type;
+      output.innerHTML += `<span class="${className}">[${timestamp}] ${icon} ${message}</span>\n`;
+      output.scrollTop = output.scrollHeight;
+    }
+
+    function clearOutput() {
+      output.innerHTML = '🧹 Console cleared.\n\n';
+    }
+
+    function updateOrderCard(orderId, data) {
+      orders.set(orderId, data);
+      renderOrders();
+    }
+
+    function renderOrders() {
+      if (orders.size === 0) {
+        activeOrdersDiv.innerHTML = 'No orders yet. Submit an order to begin!';
+        orderCountSpan.textContent = '0';
+        return;
+      }
+
+      orderCountSpan.textContent = orders.size;
+      activeOrdersDiv.innerHTML = '';
+      
+      orders.forEach((order, orderId) => {
+        const card = document.createElement('div');
+        card.className = 'order-card';
+        card.innerHTML = `
+          <strong>Order ${orderId.substring(0, 8)}...</strong>
+          <span class="order-status ${order.status}">${order.status.toUpperCase()}</span>
+          <br>
+          <small>
+            ${order.tokenIn} → ${order.tokenOut} | 
+            Amount: ${order.amountIn} | 
+            ${order.dexUsed ? `DEX: ${order.dexUsed}` : 'Routing...'}
+          </small>
+        `;
+        activeOrdersDiv.appendChild(card);
+      });
+    }
+
+    async function submitOrder() {
+      try {
+        log('Submitting order...', 'info');
+        const tokens = [
+          ['SOL', 'USDC'],
+          ['SOL', 'BONK'],
+          ['USDC', 'SOL'],
+          ['SOL', 'RAY']
+        ];
+        const [tokenIn, tokenOut] = tokens[Math.floor(Math.random() * tokens.length)];
+        
+        const response = await fetch(`${API_URL}/api/orders/execute`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: 'demo-user-' + Math.random().toString(36).substr(2, 9),
+            type: 'market',
+            tokenIn,
+            tokenOut,
+            amountIn: (Math.random() * 5 + 1).toFixed(2),
+            slippage: 0.01
+          })
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+          log(` Order created: ${data.orderId}`, 'success');
+          log(`   Message: ${data.message}`, 'info');
+          document.getElementById('orderId').value = data.orderId;
+          
+          updateOrderCard(data.orderId, {
+            status: 'pending',
+            tokenIn,
+            tokenOut,
+            amountIn: (Math.random() * 5 + 1).toFixed(2),
+            dexUsed: null
+          });
+          
+          // Auto-connect WebSocket
+          setTimeout(() => connectWebSocket(data.orderId), 500);
+        } else {
+          log(` Error: ${data.message}`, 'error');
+        }
+      } catch (err) {
+        log(` Error: ${err.message}`, 'error');
+      }
+    }
+
+    async function submitMultiple(count = 5) {
+      log(`\n🚀 Submitting ${count} orders concurrently...`, 'info');
+      const tokens = [
+        ['SOL', 'USDC'],
+        ['SOL', 'BONK'],
+        ['USDC', 'SOL'],
+        ['SOL', 'RAY'],
+        ['USDC', 'BONK']
+      ];
+
+      const promises = Array.from({ length: count }, (_, i) => {
+        const [tokenIn, tokenOut] = tokens[i % tokens.length];
+        return fetch(`${API_URL}/api/orders/execute`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: `user-${i + 1}`,
+            type: 'market',
+            tokenIn,
+            tokenOut,
+            amountIn: (Math.random() * 3 + 1).toFixed(2),
+            slippage: 0.01
+          })
+        }).then(r => r.json());
+      });
+
+      try {
+        const results = await Promise.all(promises);
+        results.forEach((data, i) => {
+          if (data.success) {
+            log(` Order ${i + 1}: ${data.orderId.substring(0, 12)}...`, 'success');
+            updateOrderCard(data.orderId, {
+              status: 'pending',
+              tokenIn: tokens[i % tokens.length][0],
+              tokenOut: tokens[i % tokens.length][1],
+              amountIn: (Math.random() * 3 + 1).toFixed(2),
+              dexUsed: null
+            });
+            
+            // Connect WebSocket for each order
+            setTimeout(() => connectWebSocketSilent(data.orderId), i * 200);
+          }
+        });
+        log(`\n Check Railway logs for DEX routing decisions!`, 'info');
+      } catch (err) {
+        log(` Error: ${err.message}`, 'error');
+      }
+    }
+
+    async function checkMetrics() {
+      try {
+        log('\n Fetching metrics...', 'info');
+        const response = await fetch(`${API_URL}/api/orders/metrics`);
+        const data = await response.json();
+        log('Queue Metrics:', 'success');
+        log(JSON.stringify(data, null, 2), 'info');
+      } catch (err) {
+        log(` Error: ${err.message}`, 'error');
+      }
+    }
+
+    function connectWebSocket(orderId = null) {
+      const id = orderId || document.getElementById('orderId').value;
+      if (!id) {
+        alert('Please enter an Order ID (or submit an order first)');
+        return;
+      }
+
+      if (ws) ws.close();
+
+      log(`\n Connecting WebSocket for order: ${id.substring(0, 12)}...`, 'info');
+      ws = new WebSocket(`${WS_URL}/api/orders/ws/${id}`);
+
+      ws.onopen = () => {
+        log(' WebSocket connected!', 'success');
+        wsIndicator.className = 'status-indicator connected';
+        wsStatus.textContent = `Connected to ${id.substring(0, 12)}...`;
+      };
+
+      ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        log(` Status Update: ${msg.status.toUpperCase()}`, 'success');
+        log(`   ${JSON.stringify(msg, null, 2)}`, 'info');
+        
+        updateOrderCard(id, msg);
+      };
+
+      ws.onerror = (err) => {
+        log(' WebSocket error', 'error');
+        wsIndicator.className = 'status-indicator disconnected';
+        wsStatus.textContent = 'Error';
+      };
+
+      ws.onclose = () => {
+        log(' WebSocket closed', 'warning');
+        wsIndicator.className = 'status-indicator disconnected';
+        wsStatus.textContent = 'Disconnected';
+      };
+    }
+
+    function connectWebSocketSilent(orderId) {
+      const wsTemp = new WebSocket(`${WS_URL}/api/orders/ws/${orderId}`);
+      
+      wsTemp.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        updateOrderCard(orderId, msg);
+      };
+    }
+
+    function disconnectWebSocket() {
+      if (ws) {
+        ws.close();
+        log(' WebSocket disconnected', 'warning');
+      }
+    }
+
+    // Initial render
+    renderOrders();
+  </script>
+</body>
+</html>
